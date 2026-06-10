@@ -1,13 +1,69 @@
+import io
+
+import pandas as pd
 import streamlit as st
 
-from modules import data_loader, metrics
+from modules import data_loader, doc_extractor, metrics
 
 st.set_page_config(page_title="Impact-Story-Teller", layout="wide")
 
 with st.sidebar:
+    st.header("Extract from Word/PDF")
+    st.caption("Upload a Word or PDF document containing a data table to convert it to XLSX/CSV.")
+    doc_file = st.file_uploader("Upload a .docx or .pdf file", type=["docx", "pdf"], key="doc_upload")
+
+    if doc_file is not None:
+        tables, extract_error = doc_extractor.extract_tables(doc_file)
+
+        if extract_error:
+            st.error(extract_error)
+        elif not tables:
+            st.warning("No tables were found in this document.")
+        else:
+            if len(tables) > 1:
+                table_index = st.selectbox(
+                    "Multiple tables found - choose one to convert",
+                    range(len(tables)),
+                    format_func=lambda i: f"Table {i + 1} ({tables[i].shape[0]} rows x {tables[i].shape[1]} cols)",
+                )
+            else:
+                table_index = 0
+
+            extracted_df = tables[table_index]
+            st.dataframe(extracted_df.head(10))
+
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+                extracted_df.to_excel(writer, index=False)
+
+            st.download_button(
+                "Download as XLSX",
+                data=excel_buffer.getvalue(),
+                file_name="extracted_data.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            st.download_button(
+                "Download as CSV",
+                data=extracted_df.to_csv(index=False).encode("utf-8"),
+                file_name="extracted_data.csv",
+                mime="text/csv",
+            )
+
+            st.caption("Download the file above, then upload it below to view KPIs.")
+
+    st.divider()
+
     st.header("Upload Data")
     uploaded_file = st.file_uploader("Upload an Excel or CSV file", type=["xlsx", "csv"])
-    st.caption("A sample dataset is available at **data/sample_data.xlsx**.")
+
+    st.caption("A sample dataset is available below.")
+    with open("data/sample_data.xlsx", "rb") as f:
+        st.download_button(
+            label="Download sample_data.xlsx",
+            data=f,
+            file_name="sample_data.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
 st.title("Impact-Story-Teller")
 
