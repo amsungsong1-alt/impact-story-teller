@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Data files (keep sample data for testing)
+data/*.xlsx
+data/*.csv
+!data/sample_data.xlsx
