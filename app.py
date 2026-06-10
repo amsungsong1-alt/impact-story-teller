@@ -38,34 +38,42 @@ with st.sidebar:
                 "remembered so future uploads recognize the same wording."
             )
 
-            suggested = column_mapping.suggest_mapping(extracted_df.columns.tolist())
-            options = ["(unmapped)"] + data_loader.EXPECTED_COLUMNS
+            raw_columns = extracted_df.columns.tolist()
+            suggested = column_mapping.suggest_mapping(raw_columns)
 
-            column_choices = {}
-            for raw_col in extracted_df.columns:
-                default = suggested.get(raw_col)
+            # Reverse the suggested raw_col -> expected_col mapping so each
+            # expected column defaults to the raw column that best matches it.
+            suggested_reverse = {}
+            for raw_col, expected_col in suggested.items():
+                suggested_reverse.setdefault(expected_col, raw_col)
+
+            options = ["(none)"] + raw_columns
+
+            expected_choices = {}
+            for expected_col in data_loader.EXPECTED_COLUMNS:
+                default = suggested_reverse.get(expected_col)
                 default_index = options.index(default) if default in options else 0
-                column_choices[raw_col] = st.selectbox(
-                    f"'{raw_col}' maps to",
+                expected_choices[expected_col] = st.selectbox(
+                    f"'{expected_col}' comes from",
                     options,
                     index=default_index,
-                    key=f"map_{table_index}_{raw_col}",
+                    key=f"map_{table_index}_{expected_col}",
                 )
 
             rename_map = {}
-            seen_targets = {}
-            for raw_col, choice in column_choices.items():
-                if choice == "(unmapped)":
+            seen_sources = {}
+            for expected_col, raw_col in expected_choices.items():
+                if raw_col == "(none)":
                     continue
-                if choice in seen_targets:
+                if raw_col in seen_sources:
                     st.warning(
-                        f"Both '{seen_targets[choice]}' and '{raw_col}' are mapped to "
-                        f"'{choice}'. Using '{seen_targets[choice]}' and leaving "
-                        f"'{raw_col}' unmapped."
+                        f"'{raw_col}' is mapped to both '{seen_sources[raw_col]}' and "
+                        f"'{expected_col}'. Using it for '{seen_sources[raw_col]}' and "
+                        f"leaving '{expected_col}' unmapped."
                     )
                     continue
-                seen_targets[choice] = raw_col
-                rename_map[raw_col] = choice
+                seen_sources[raw_col] = expected_col
+                rename_map[raw_col] = expected_col
 
             mapped_df = extracted_df.rename(columns=rename_map)
 
