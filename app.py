@@ -3,7 +3,7 @@ import io
 import pandas as pd
 import streamlit as st
 
-from modules import data_loader, doc_extractor, metrics
+from modules import column_mapping, data_loader, doc_extractor, metrics
 
 st.set_page_config(page_title="Impact-Story-Teller", layout="wide")
 
@@ -32,9 +32,51 @@ with st.sidebar:
             extracted_df = tables[table_index]
             st.dataframe(extracted_df.head(10))
 
+            st.subheader("Map columns to expected schema")
+            st.caption(
+                "Review the suggested mapping below. Confirmed mappings are "
+                "remembered so future uploads recognize the same wording."
+            )
+
+            suggested = column_mapping.suggest_mapping(extracted_df.columns.tolist())
+            options = ["(unmapped)"] + data_loader.EXPECTED_COLUMNS
+
+            column_choices = {}
+            for raw_col in extracted_df.columns:
+                default = suggested.get(raw_col)
+                default_index = options.index(default) if default in options else 0
+                column_choices[raw_col] = st.selectbox(
+                    f"'{raw_col}' maps to",
+                    options,
+                    index=default_index,
+                    key=f"map_{table_index}_{raw_col}",
+                )
+
+            rename_map = {}
+            seen_targets = {}
+            for raw_col, choice in column_choices.items():
+                if choice == "(unmapped)":
+                    continue
+                if choice in seen_targets:
+                    st.warning(
+                        f"Both '{seen_targets[choice]}' and '{raw_col}' are mapped to "
+                        f"'{choice}'. Using '{seen_targets[choice]}' and leaving "
+                        f"'{raw_col}' unmapped."
+                    )
+                    continue
+                seen_targets[choice] = raw_col
+                rename_map[raw_col] = choice
+
+            mapped_df = extracted_df.rename(columns=rename_map)
+
+            if st.button("Remember this mapping for future uploads", key=f"learn_{table_index}"):
+                for raw_col, expected_col in rename_map.items():
+                    column_mapping.save_synonym(expected_col, raw_col)
+                st.success("Mapping saved. Future uploads with these column names will be recognized automatically.")
+
             excel_buffer = io.BytesIO()
             with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
-                extracted_df.to_excel(writer, index=False)
+                mapped_df.to_excel(writer, index=False)
 
             st.download_button(
                 "Download as XLSX",
@@ -44,7 +86,7 @@ with st.sidebar:
             )
             st.download_button(
                 "Download as CSV",
-                data=extracted_df.to_csv(index=False).encode("utf-8"),
+                data=mapped_df.to_csv(index=False).encode("utf-8"),
                 file_name="extracted_data.csv",
                 mime="text/csv",
             )
