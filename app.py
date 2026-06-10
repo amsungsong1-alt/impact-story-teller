@@ -32,12 +32,6 @@ with st.sidebar:
             extracted_df = tables[table_index]
             st.dataframe(extracted_df.head(10))
 
-            st.subheader("Map columns to expected schema")
-            st.caption(
-                "Review the suggested mapping below. Confirmed mappings are "
-                "remembered so future uploads recognize the same wording."
-            )
-
             raw_columns = extracted_df.columns.tolist()
             suggested = column_mapping.suggest_mapping(raw_columns)
 
@@ -47,18 +41,25 @@ with st.sidebar:
             for raw_col, expected_col in suggested.items():
                 suggested_reverse.setdefault(expected_col, raw_col)
 
+            matched = sum(1 for v in suggested_reverse.values() if v is not None)
+            st.caption(
+                f"Recognized {matched} of {len(data_loader.EXPECTED_COLUMNS)} expected "
+                "columns automatically."
+            )
+
             options = ["(none)"] + raw_columns
 
-            expected_choices = {}
-            for expected_col in data_loader.EXPECTED_COLUMNS:
-                default = suggested_reverse.get(expected_col)
-                default_index = options.index(default) if default in options else 0
-                expected_choices[expected_col] = st.selectbox(
-                    f"'{expected_col}' comes from",
-                    options,
-                    index=default_index,
-                    key=f"map_{table_index}_{expected_col}",
-                )
+            with st.expander("Adjust column mapping"):
+                expected_choices = {}
+                for expected_col in data_loader.EXPECTED_COLUMNS:
+                    default = suggested_reverse.get(expected_col)
+                    default_index = options.index(default) if default in options else 0
+                    expected_choices[expected_col] = st.selectbox(
+                        f"'{expected_col}' comes from",
+                        options,
+                        index=default_index,
+                        key=f"map_{table_index}_{expected_col}",
+                    )
 
             rename_map = {}
             seen_sources = {}
